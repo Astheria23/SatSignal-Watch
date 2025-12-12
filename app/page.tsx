@@ -3,12 +3,11 @@
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { TARGET_CITIES, CityLocation } from './lib/location';
-import { Wifi } from 'lucide-react';
+import { Wifi, Info, CloudRain, Zap } from 'lucide-react'; // Tambah icon
 
-// Import Map secara Lazy/Dynamic biar gak error window is not defined
 const Map = dynamic(() => import('./components/map'), { 
     ssr: false,
-    loading: () => <div className="w-full h-full flex items-center justify-center bg-gray-100">Loading Map...</div>
+    loading: () => <div className="w-full h-full flex items-center justify-center bg-slate-900 text-white">Initializing Satellite Uplink...</div>
 });
 
 interface ProcessedData extends CityLocation {
@@ -22,109 +21,144 @@ export default function Home() {
   const [mapData, setMapData] = useState<ProcessedData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // LOGIC: Klasifikasi Sinyal berdasarkan deskripsi cuaca
+  // LOGIC SAMA KAYAK SEBELUMNYA
   const analyzeSignal = (weatherDesc: string): { status: 'Excellent' | 'Degraded' | 'Critical'; color: string } => {
     const desc = weatherDesc.toLowerCase();
-    
     if (desc.includes('petir') || desc.includes('lebat') || desc.includes('extrem')) {
-        return { status: 'Critical', color: '#ef4444' }; // Red-500
+        return { status: 'Critical', color: '#ef4444' }; 
     } else if (desc.includes('hujan') || desc.includes('sedang')) {
-        return { status: 'Degraded', color: '#eab308' }; // Yellow-500
+        return { status: 'Degraded', color: '#eab308' }; 
     } else {
-        return { status: 'Excellent', color: '#22c55e' }; // Green-500
+        return { status: 'Excellent', color: '#22c55e' }; 
     }
   };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch data parallel biar cepet
-        const promises = TARGET_CITIES.map(async (city) => {
-            // Gunakan Proxy cors-anywhere atau sejenisnya JIKA di-block browser.
-            // Untuk sekarang kita coba direct hit ke API BMKG.
-            // Kalau error CORS, ganti url jadi: `https://api.allorigins.win/raw?url=${encodeURIComponent('https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=')}${city.code}`
-            
-            const res = await fetch(`https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=${city.code}`);
-            const json = await res.json();
-            
-            // Ambil data cuaca jam ini (Index 0 di array cuaca)
-            // Struktur API: data[0].cuaca[0][0] -> ini kadang berubah tergantung API, perlu cek console.log kalau error
-            const currentData = json.data[0].cuaca[0][0]; 
-            
-            const signal = analyzeSignal(currentData.weather_desc);
+                const promises = TARGET_CITIES.map(async (city) => {
+                        try {
+                const res = await fetch(`https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=${city.code}`);
+                if (!res.ok) return null; 
+                const json = await res.json();
+                if (!json.data || json.data.length === 0) return null;
 
-            return {
-                ...city,
-                weatherDesc: currentData.weather_desc,
-                temp: currentData.t,
-                signalStatus: signal.status,
-                color: signal.color
-            };
+                const currentData = json.data[0].cuaca[0][0]; 
+                if (!currentData) return null;
+
+                const signal = analyzeSignal(currentData.weather_desc);
+
+                return {
+                    ...city,
+                    weatherDesc: currentData.weather_desc,
+                    temp: currentData.t,
+                    signalStatus: signal.status,
+                    color: signal.color
+                } as ProcessedData;
+                                    } catch {
+                return null;
+            }
         });
 
         const results = await Promise.all(promises);
-        setMapData(results);
+        const validResults = results.filter((item): item is ProcessedData => item !== null);
+        setMapData(validResults);
         setLoading(false);
-
-      } catch (error) {
-        console.error("Gagal ambil data BMKG:", error);
+                        } catch {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
   return (
-    <main className="flex flex-col h-screen">
-      {/* Header */}
-      <nav className="bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg z-10">
-        <div className="flex items-center gap-2">
-            <Wifi className="text-blue-400" />
-            <h1 className="font-bold text-xl">SatSignal Watch</h1>
-        </div>
-        <div className="text-xs text-slate-400">
-            Data Source: BMKG Public API
+    <main className="flex flex-col h-screen bg-slate-900 text-slate-100 overflow-hidden">
+      
+      {/* Navbar Minimalis */}
+      <nav className="absolute top-0 left-0 w-full p-4 z-20 pointer-events-none">
+        <div className="flex items-center gap-3 pointer-events-auto bg-slate-900/80 backdrop-blur-md w-fit px-4 py-2 rounded-full border border-slate-700 shadow-2xl">
+            <div className="p-2 bg-blue-600 rounded-full">
+                <Wifi className="text-white w-4 h-4" />
+            </div>
+            <div>
+                <h1 className="font-bold text-sm tracking-wide">SATSIGNAL WATCH</h1>
+                <p className="text-[10px] text-slate-400">Live Rain Fade Monitoring</p>
+            </div>
         </div>
       </nav>
 
-      {/* Konten: Map & Sidebar Overlay */}
-      <div className="flex-1 relative">
-        
-        {/* Map Container */}
-        <div className="absolute inset-0 z-0">
-            <Map data={mapData} />
-        </div>
+      {/* Map Content */}
+      <div className="flex-1 relative z-10">
+        <Map data={mapData} />
 
-        {/* Legend Overlay (Pojok Kanan Atas) */}
-        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-4 rounded-lg shadow-xl z-[1000] max-w-xs">
-            <h3 className="font-bold text-slate-800 mb-2 border-b pb-1">Signal Status</h3>
-            <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                    <span>Excellent (Clear Sky)</span>
+        {/* INFO BOX / LEGEND (KANAN ATAS) */}
+        <div className="absolute top-4 right-4 z-[1000] w-72">
+            {/* Card Glassmorphism */}
+            <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-2xl">
+                
+                {/* Header Info */}
+                <div className="mb-4 pb-4 border-b border-slate-700">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Info className="w-4 h-4 text-blue-400" />
+                        <h2 className="font-bold text-sm text-white">About System</h2>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                        Sistem ini memantau potensi gangguan sinyal satelit (VSAT/Starlink) akibat atenuasi hujan (Rain Fade) secara real-time berdasarkan data BMKG.
+                    </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
-                    <span>Degraded (Light Rain)</span>
+
+                {/* Legend Status */}
+                <h3 className="text-[10px] uppercase font-bold text-slate-500 mb-3 tracking-wider">Signal Status Legend</h3>
+                <div className="space-y-3">
+                    
+                    {/* Item 1 */}
+                    <div className="flex items-start gap-3">
+                        <span className="w-2 h-2 mt-1 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></span>
+                        <div>
+                            <p className="text-xs font-bold text-green-400">Excellent</p>
+                            <p className="text-[10px] text-slate-400">Cuaca cerah/berawan. Sinyal optimal.</p>
+                        </div>
+                    </div>
+
+                    {/* Item 2 */}
+                    <div className="flex items-start gap-3">
+                        <span className="w-2 h-2 mt-1 rounded-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]"></span>
+                        <div>
+                            <p className="text-xs font-bold text-yellow-400">Degraded</p>
+                            <p className="text-[10px] text-slate-400">Hujan ringan. Potensi jitter/lag.</p>
+                        </div>
+                    </div>
+
+                    {/* Item 3 */}
+                    <div className="flex items-start gap-3">
+                        <span className="w-2 h-2 mt-1 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
+                        <div>
+                            <div className="flex items-center gap-1">
+                                <p className="text-xs font-bold text-red-400">Critical Outage</p>
+                                <Zap className="w-3 h-3 text-red-500 fill-red-500" />
+                            </div>
+                            <p className="text-[10px] text-slate-400">Hujan deras/petir. Risiko putus koneksi tinggi.</p>
+                        </div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></span>
-                    <span>Critical (Heavy Rain/Storm)</span>
-                </div>
-            </div>
-            
-            {/* Mini Dashboard */}
-            <div className="mt-4 pt-2 border-t text-xs text-slate-600">
-               {loading ? 'Fetching satellites...' : (
-                   <>
-                    <p>Monitored Nodes: <b>{mapData.length}</b></p>
-                    <p>Critical Areas: <b>{mapData.filter(d => d.signalStatus === 'Critical').length}</b></p>
-                   </>
-               )}
+
+                {/* Footer Data */}
+                                <div className="mt-5 pt-3 border-t border-slate-700 flex justify-between items-center text-[10px] text-slate-500">
+                                        <span>
+                                            {loading ? (
+                                                <span className="text-slate-400">Scanning network...</span>
+                                            ) : (
+                                                <>Monitored Nodes: <b className="text-white">{mapData.length}</b></>
+                                            )}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                                <CloudRain className="w-3 h-3" />
+                                                <span>Source: BMKG v2</span>
+                                        </div>
+                                </div>
+
             </div>
         </div>
-
       </div>
     </main>
   );
