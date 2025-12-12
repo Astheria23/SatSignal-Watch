@@ -2,7 +2,7 @@
 
 import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { LatLngBoundsExpression } from 'leaflet';
+import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
 
 interface WeatherData {
   id: string;
@@ -22,15 +22,17 @@ export default function Map({ data }: { data: WeatherData[] }) {
     [-15.0, 90.0], // Pojok Kiri Bawah (Samudra Hindia)
     [10.0, 150.0]  // Pojok Kanan Atas (Pasifik/Papua)
   ];
+  const defaultCenter: LatLngExpression = [-2.5, 118];
 
   return (
     <MapContainer 
-      center={[-2.5, 118]} 
+      center={defaultCenter} 
       zoom={5} 
       minZoom={5} // Gak bisa zoom out sampe liat dunia
       maxBounds={indoBounds} // Lock area mentok di kotak indoBounds
       maxBoundsViscosity={1.0} // Bikin 'mental' kalau ditarik keluar batas
       className="w-full h-full z-0 bg-slate-900" // bg-slate biar kalau loading warnanya gelap
+      zoomControl={false}
     >
       <TileLayer
         attribution='&copy; OpenStreetMap contributors'
@@ -56,7 +58,7 @@ export default function Map({ data }: { data: WeatherData[] }) {
             </Tooltip>
 
             <Popup>
-                <div className="p-1 min-w-[150px]">
+                <div className="p-1 min-w-40">
                     <h3 className="font-bold text-base text-slate-800">{city.name}</h3>
                     <div className="text-xs mt-2 space-y-1 text-slate-600">
                         <p>Cuaca: <b className="text-slate-900">{city.weatherDesc}</b></p>

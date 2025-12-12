@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { TARGET_CITIES, CityLocation } from './lib/location';
 import { Wifi, Info, CloudRain, Zap } from 'lucide-react'; // Tambah icon
@@ -20,6 +20,16 @@ interface ProcessedData extends CityLocation {
 export default function Home() {
   const [mapData, setMapData] = useState<ProcessedData[]>([]);
   const [loading, setLoading] = useState(true);
+
+    const orderedData = useMemo(() => {
+        const priority: Record<ProcessedData['signalStatus'], number> = {
+            Critical: 0,
+            Degraded: 1,
+            Excellent: 2,
+        };
+
+        return [...mapData].sort((a, b) => priority[a.signalStatus] - priority[b.signalStatus]);
+    }, [mapData]);
 
   // LOGIC SAMA KAYAK SEBELUMNYA
   const analyzeSignal = (weatherDesc: string): { status: 'Excellent' | 'Degraded' | 'Critical'; color: string } => {
@@ -91,8 +101,52 @@ export default function Home() {
       <div className="flex-1 relative z-10">
         <Map data={mapData} />
 
+                {/* Query Sidebar (Kiri) */}
+            <div className="absolute top-24 left-4 z-50 w-72">
+                        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-2xl">
+                                <div className="mb-4">
+                                        <h2 className="font-bold text-sm text-white tracking-wide">Criticality Watchlist</h2>
+                                        <p className="text-[10px] text-slate-400 mt-1">Prioritas lokasi berdasarkan risiko gangguan sinyal.</p>
+                                </div>
+
+                                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                                        {loading ? (
+                                                <p className="text-[11px] text-slate-400">Memuat data telemetri...</p>
+                                        ) : orderedData.length === 0 ? (
+                                                <p className="text-[11px] text-slate-500">Tidak ada data yang dapat dianalisis.</p>
+                                        ) : (
+                                                orderedData.map((city) => {
+                                                        const badgeStyles: Record<ProcessedData['signalStatus'], string> = {
+                                                            Critical: 'bg-red-500/20 border border-red-500/60 text-red-300',
+                                                            Degraded: 'bg-yellow-500/20 border border-yellow-500/60 text-yellow-200',
+                                                            Excellent: 'bg-green-500/20 border border-green-500/60 text-green-200',
+                                                        };
+
+                                                        return (
+                                                            <div key={city.id} className="bg-slate-900/80 border border-slate-700 rounded-lg p-3">
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <div>
+                                                                        <p className="text-xs font-semibold text-white">{city.name}</p>
+                                                                        <p className="text-[10px] text-slate-400 capitalize">{city.weatherDesc || 'Tidak ada data cuaca'}</p>
+                                                                    </div>
+                                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${badgeStyles[city.signalStatus]}`}>
+                                                                        {city.signalStatus}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
+                                                                    <span>Suhu: <b className="text-slate-200">{city.temp ?? '-'}°C</b></span>
+                                                                    <span>Node ID: {city.id}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                })
+                                        )}
+                                </div>
+                        </div>
+                </div>
+
         {/* INFO BOX / LEGEND (KANAN ATAS) */}
-        <div className="absolute top-4 right-4 z-[1000] w-72">
+    <div className="absolute top-4 right-4 z-50 w-72">
             {/* Card Glassmorphism */}
             <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-2xl">
                 
